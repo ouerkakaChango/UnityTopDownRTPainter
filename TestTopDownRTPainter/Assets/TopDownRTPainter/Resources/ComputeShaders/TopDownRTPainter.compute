@@ -1,0 +1,51 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel InitPaint
+#pragma kernel UpdatePaint
+
+RWTexture2D<half4> Result;
+
+StructuredBuffer<float2> posArr;
+float radius;
+//StructuredBuffer<int> tris;
+//StructuredBuffer<float3> vertices;
+//StructuredBuffer<float3> normals;
+//StructuredBuffer<BVHNode> bvh;
+//const int treeDepth;
+//
+//float darkPower;
+//int SPP;
+//
+//float2 quadSize;
+//float3 quadPos;
+//float3 lightDir;
+
+//#########################################################################################################
+[numthreads(8, 8, 1)]
+void InitPaint(uint3 id : SV_DispatchThreadID)
+{
+	Result[id.xy] = float4(0,0,0, 0);
+}
+//#########################################################################################################
+#include "HLSL/CommonDef.hlsl"
+#include "HLSL/SDF/SDFCommonDef.hlsl"
+[numthreads(8, 8, 1)]
+void UpdatePaint(uint3 id : SV_DispatchThreadID)
+{
+	float4 result = 0;
+	float sdf = 1;
+	int num = GetSize(posArr);
+	float2 p = GetUV(Result, id);
+	for (int i = 0; i < num; i++)
+	{
+		float2 center = posArr[i];
+		center = 1 - center;
+		sdf = min(sdf, SDFSphere(p, center, radius));
+	}
+	if (sdf < 0)
+	{
+		result = float4(1, 0, 0, 1);
+	}
+	Result[id.xy] = result;
+	//Result[id.xy] = float4(p, 0, 1);
+}
+//#########################################################################################################
