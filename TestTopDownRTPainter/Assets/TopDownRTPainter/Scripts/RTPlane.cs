@@ -9,11 +9,12 @@ public class RTPlane : MonoBehaviour
     [HideInInspector]
     public Renderer debugRenderer;
     public float FPS = 24.0f;
+    public float fadeRate = 1.0f;
     float time_update;
     float t_update;
 
     public Vector2Int resolution = new Vector2Int(128, 128);
-    public RenderTexture rt;
+    public RenderTexture rt1,rt2;
 
     RTUnitTag[] allTags;
     ComputeShader cs;
@@ -27,7 +28,7 @@ public class RTPlane : MonoBehaviour
         InitRT();
         if(useDebugRenderer)
         {
-            debugRenderer.material.SetTexture("_MainTex", rt);
+            debugRenderer.material.SetTexture("_MainTex", rt1);
         }
         t_update = 0;
 
@@ -53,15 +54,18 @@ public class RTPlane : MonoBehaviour
 
     void InitRT()
     {
-        rt = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.ARGBHalf);
-        rt.enableRandomWrite = true;
-        rt.Create();
+        rt1 = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.ARGBHalf);
+        rt1.enableRandomWrite = true;
+        rt1.Create();
+        rt2 = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.ARGBHalf);
+        rt2.enableRandomWrite = true;
+        rt2.Create();
 
         //##################################
         //### compute
         int kInx = cs.FindKernel("InitPaint");
 
-        cs.SetTexture(kInx, "Result", rt);
+        cs.SetTexture(kInx, "Result", rt1);
 
         //cs.SetInt("SPP", SPP);
         //cs.SetFloat("darkPower", darkPower);
@@ -71,17 +75,43 @@ public class RTPlane : MonoBehaviour
         cs.Dispatch(kInx, resolution.x / 8, resolution.y / 8, 1);
         //### compute
         //#####################################;
+
+        //##################################
+        //### compute
+        kInx = cs.FindKernel("InitPaint");
+
+        cs.SetTexture(kInx, "Result", rt2);
+        cs.Dispatch(kInx, resolution.x / 8, resolution.y / 8, 1);
+        //### compute
+        //#####################################;
     }
 
     void FadeAndDrawNewPos()
     {
+        Debug.Log("update Draw");
+        float copyAlpha = (1.0f - time_update) * fadeRate;
+        //##################################
+        //### compute
+        int kInx = cs.FindKernel("FadeCopy");
+
+        cs.SetTexture(kInx, "Result", rt2);
+        cs.SetTexture(kInx, "LastFrame", rt1);
+        cs.SetFloat("copyAlpha", copyAlpha);
+
+        cs.Dispatch(kInx, resolution.x / 8, resolution.y / 8, 1);
+        //### compute
+        //#####################################;
+
         UpdatePosArr();
+        Debug.Log(posArr[0]);
+        Debug.Log(posArr[1]);
         PreComputeBuffer(ref buffer_posArr, sizeof(float) * 2, posArr);
         //##################################
         //### compute
-        int kInx = cs.FindKernel("UpdatePaint");
+        kInx = cs.FindKernel("PaintPos");
 
-        cs.SetTexture(kInx, "Result", rt);
+        cs.SetTexture(kInx, "Result", rt1);
+        cs.SetTexture(kInx, "LastFrame", rt2);
         cs.SetBuffer(kInx, "posArr", buffer_posArr);
         cs.SetFloat("radius", 2*0.5f/size.x);
 
@@ -111,12 +141,9 @@ public class RTPlane : MonoBehaviour
         return (pos - center) / size + Vector2.one*0.5f;
     }
 
+    //如果是元素个数一直在变动的情况，还不如就每帧new ComputeBuffer，反正也不是很费好像
     static public void PreComputeBuffer(ref ComputeBuffer buffer, int stride, in System.Array dataArr)
     {
-        if (buffer != null)
-        {
-            return;
-        }
         buffer = new ComputeBuffer(dataArr.Length, stride);
         buffer.SetData(dataArr);
     }
