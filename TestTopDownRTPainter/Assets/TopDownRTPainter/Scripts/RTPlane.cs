@@ -118,6 +118,7 @@ public class RTPlane : MonoBehaviour
         cs.Dispatch(kInx, resolution.x / 8, resolution.y / 8, 1);
         //### compute
         //#####################################;
+        buffer_posArr.Dispose();
     }
 
     List<Vector2> tempPosList = new List<Vector2>();
